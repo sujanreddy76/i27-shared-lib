@@ -1,4 +1,4 @@
-import com.i27academy.builds.Calculator
+import com.i26academy.builds.Calculator
 
 def call(Map pipelineParams){
     //Object/instance of the calculator class
