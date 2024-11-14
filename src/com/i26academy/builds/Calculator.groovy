@@ -7,7 +7,7 @@ class Calculator(){
     def jenkins
     //constructor(it will take reference for calling jenkins,running scripts it will take reference of jenkins variable)
     //jenkins variable will hold jenkins reference here
-    calculator(jenkins){
+    Calculator(jenkins){
 
     }
     def add(firstNumber, secondNumber) {
