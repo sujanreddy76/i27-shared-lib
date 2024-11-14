@@ -2,7 +2,7 @@
 package com.i26academy.builds;
 
 //Defining a class
-class Calculator(){
+class Calculator{
     //declaring a variable (We use this variable for builds deployment)
     def jenkins
     //constructor(it will take reference for calling jenkins,running scripts it will take reference of jenkins variable)
