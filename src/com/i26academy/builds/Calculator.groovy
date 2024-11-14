@@ -1,5 +1,5 @@
 //The below line indicates that we are declaring package for builds folder, whenever we use the methods from builds package we have to import this package
-package com.i27academy.builds;
+package com.i26academy.builds;
 
 //Defining a class
 class Calculator(){
