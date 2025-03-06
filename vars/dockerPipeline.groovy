@@ -5,479 +5,247 @@ def call(Map pipelineParams) {
     //An instance of the class Docker is created
     Docker docker = new Docker(this)
     pipeline {
-    agent {
-        label 'k8s-slave'
-    }
-    //{ choice(name: 'CHOICES', choices: ['one', 'two', 'three'], description: '') }
-    parameters {
-        choice(name: 'scanOnly',
-               choices: 'no\nyes',
-               description: 'Do you want to Scan the application:?'
-        )
-        choice(name: 'buildOnly',
-               choices: 'no\nyes',
-               description: 'Do you want to Build the application:?'
-        )        
-        choice(name: 'dockerPush',
-               choices: 'no\nyes',
-               description: 'Do you want to trigger the application build, docker build and docker Push:?'
-        )        
-        choice(name: 'deployToDev',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to dev environment:?'
-        )           
-        choice(name: 'deployToTest',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to test environment:?'
-        )
-        choice(name: 'deployToStage',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to stage environment:?'
-        )           
-        choice(name: 'deployToProd',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to prod environment:?'
-        )   
+        agent {
+            label 'k8s-slave'
+        }
+        //{ choice(name: 'CHOICES', choices: ['one', 'two', 'three'], description: '') }
+        parameters {
+            choice(name: 'scanOnly',
+                choices: 'no\nyes',
+                description: 'Do you want to Scan the application:?'
+            )
+            choice(name: 'buildOnly',
+                choices: 'no\nyes',
+                description: 'Do you want to Build the application:?'
+            )        
+            choice(name: 'dockerPush',
+                choices: 'no\nyes',
+                description: 'Do you want to trigger the application build, docker build and docker Push:?'
+            )        
+            choice(name: 'deployToDev',
+                choices: 'no\nyes',
+                description: 'Do you want to Deploy the application to dev environment:?'
+            )           
+            choice(name: 'deployToTest',
+                choices: 'no\nyes',
+                description: 'Do you want to Deploy the application to test environment:?'
+            )
+            choice(name: 'deployToStage',
+                choices: 'no\nyes',
+                description: 'Do you want to Deploy the application to stage environment:?'
+            )           
+            choice(name: 'deployToProd',
+                choices: 'no\nyes',
+                description: 'Do you want to Deploy the application to prod environment:?'
+            )   
 
-    }
-    // Tools configured in jenkins-master
-    tools {
-        maven 'Maven-3.8.8'
-        jdk 'JDK-17'
-    }
-    environment {
-        APPLICATION_NAME = "${pipelineParams.appName}"
-        POM_VERSION = readMavenPom().getVersion()
-        POM_PACKAGING = readMavenPom().getPackaging()
-        DOCKER_HUB = "docker.io/sujanreddy76"
-        DOCKER_CREDS = credentials('dockerhub_creds') //username and password
-    }
-    stages {
-        stage('Build') {
-            when {
-                anyOf {
-                    expression {
-                        params.dockerPush == 'yes'
-                        params.buildOnly == 'yes'
+        }
+        // Tools configured in jenkins-master
+        tools {
+            maven 'Maven-3.8.8'
+            jdk 'JDK-17'
+        }
+        environment {
+            APPLICATION_NAME = "${pipelineParams.appName}"
+            POM_VERSION = readMavenPom().getVersion()
+            POM_PACKAGING = readMavenPom().getPackaging()
+            DOCKER_HUB = "docker.io/sujanreddy76"
+            DOCKER_CREDS = credentials('dockerhub_creds') //username and password
+        }
+        stages {
+            stage('Build') {
+                when {
+                    anyOf {
+                        expression {
+                            params.dockerPush == 'yes'
+                            params.buildOnly == 'yes'
+                        }
+                    }
+                }
+                //This is where build for eureka application happens
+                steps {
+                    script {
+                        docker.buildApp("${env.APPLICATION_NAME}")
+                    }
+                    // echo "Building ${APPLICATION_NAME} Application"
+                    // sh 'mvn clean package -DskipTests=true'
+                    // //mvn clean package -DskipTests=true
+                    // //mvn clean package -Dmaven.test.skip=true
+                    // archive 'target/*.jar'
+                }
+            }
+            // stage('Unit Tests') {
+            //     steps {
+            //         echo "************Performing Unit tests for ${APPLICATION_NAME} Application************"
+            //         sh 'mvn test'
+            //     }
+            // }
+
+            stage('SonarQube'){
+                when {
+                    anyOf {
+                        expression {
+                            params.dockerPush == 'yes'
+                            params.buildOnly == 'yes'                        
+                            params.scanOnly == 'yes'
+                        }
+                    }
+                }
+                steps {
+                    // Code quality needs to be implemented in this stage
+                    // Before we execute or write the code, make sure sonarqube-scanner plugin is installed
+                    // Sonar details are configured in the manage jenkins > system 
+                    echo "***********************Starting Sonar Scans with Quality Gates*********************"
+                    withSonarQubeEnv('SonarQube') {//SonarQube is the name we configured in Manage Jenkins > system > SonarQube servers, It should match exactly
+                        sh """
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=i27-eureka \
+                                -Dsonar.host.url=http://34.55.4.214:9000 \
+                                -Dsonar.login=sqa_e077ec93f2d4816fb8ec6703a8b8b07857b01d84
+                        """    
+                    }
+                    timeout (time: 2, unit: 'MINUTES'){ //NANOSECONDS, SECONDS, MINUTES, HOURS, DAYS
+                            waitForQualityGate abortPipeline: true
                     }
                 }
             }
-            //This is where build for eureka application happens
-            steps {
-                script {
-                    docker.buildApp("${env.APPLICATION_NAME}")
-                }
-                // echo "Building ${APPLICATION_NAME} Application"
-                // sh 'mvn clean package -DskipTests=true'
-                // //mvn clean package -DskipTests=true
-                // //mvn clean package -Dmaven.test.skip=true
-                // archive 'target/*.jar'
-            }
-        }
-        // stage('Unit Tests') {
-        //     steps {
-        //         echo "************Performing Unit tests for ${APPLICATION_NAME} Application************"
-        //         sh 'mvn test'
-        //     }
-        // }
+            // stage('BuildFormat') {
+            //     steps{
+            //         script{ 
+            //             //Existing: i27-eureka-0.0.1-SNAPSHOT.jar
+            //             //Destination: i27-eureka-CurrentBuildNumber-branchName.packaging
+            //           sh """
+            //             echo "Testing Jar Source: i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING}"
+            //             echo "Testing Jar Destination format: i27-${env.APPLICATION_NAME}-${currentBuild.number}-${BRANCH_NAME}.${env.POM_PACKAGING}"
+            //           """
 
-        stage('SonarQube'){
-            when {
-                anyOf {
-                    expression {
-                        params.dockerPush == 'yes'
-                        params.buildOnly == 'yes'                        
-                        params.scanOnly == 'yes'
+            //         }
+            //     }
+            // }
+            stage('Docker Build Push') {
+                when {
+                    anyOf {
+                        expression {
+                            params.dockerPush == 'yes'
+                        }
+                    }
+                }
+                steps {
+                    script {
+                        dockerBuildAndPush().call()
                     }
                 }
             }
-            steps {
-                // Code quality needs to be implemented in this stage
-                // Before we execute or write the code, make sure sonarqube-scanner plugin is installed
-                // Sonar details are configured in the manage jenkins > system 
-                echo "***********************Starting Sonar Scans with Quality Gates*********************"
-                withSonarQubeEnv('SonarQube') {//SonarQube is the name we configured in Manage Jenkins > system > SonarQube servers, It should match exactly
-                    sh """
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=i27-eureka \
-                            -Dsonar.host.url=http://34.55.4.214:9000 \
-                            -Dsonar.login=sqa_e077ec93f2d4816fb8ec6703a8b8b07857b01d84
-                    """    
-                }
-                timeout (time: 2, unit: 'MINUTES'){ //NANOSECONDS, SECONDS, MINUTES, HOURS, DAYS
-                         waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-        // stage('BuildFormat') {
-        //     steps{
-        //         script{ 
-        //             //Existing: i27-eureka-0.0.1-SNAPSHOT.jar
-        //             //Destination: i27-eureka-CurrentBuildNumber-branchName.packaging
-        //           sh """
-        //             echo "Testing Jar Source: i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING}"
-        //             echo "Testing Jar Destination format: i27-${env.APPLICATION_NAME}-${currentBuild.number}-${BRANCH_NAME}.${env.POM_PACKAGING}"
-        //           """
-
-        //         }
-        //     }
-        // }
-        stage('Docker Build Push') {
+            stage('Deploy to Dev Env') {
             when {
-                anyOf {
                     expression {
-                        params.dockerPush == 'yes'
+                        params.deployToDev == 'yes'
+                    }
+                }            
+                steps {
+                    script {
+                        imageValidation().call()
+                        dockerDeploy('dev', '5761', '8761').call()
+                    }  
+                }
+                // a mail should trigger based on the status
+                // jenkins url should be sent as an a email
+            }
+            stage('Deploy to Test Env') {
+            when {
+                    expression {
+                        params.deployToTest == 'yes'
+                    }
+                }             
+                steps {
+                    script {
+                        imageValidation().call()
+                        dockerDeploy('tst', '6761', '8761').call()      
                     }
                 }
-            }
-            steps {
-                script {
-                    dockerBuildAndPush().call()
+            } 
+            stage('Deploy to Stage Env') {
+            when {
+                allOf {
+                    anyOf {
+                        expression {
+                            params.deployToStage == 'yes'
+                        }                    
+                    }
+                    anyOf {
+                        branch 'release/*'
+                        tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
+                    }                
                 }
-            }
-        }
-        stage('Deploy to Dev Env') {
-           when {
-                expression {
-                    params.deployToDev == 'yes'
-                }
-            }            
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('dev', '5761', '8761').call()
-                }  
-            }
-            // a mail should trigger based on the status
-            // jenkins url should be sent as an a email
-        }
-        stage('Deploy to Test Env') {
-           when {
-                expression {
-                    params.deployToTest == 'yes'
-                }
+
             }             
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('tst', '6761', '8761').call()      
-                }
-            }
-        } 
-        stage('Deploy to Stage Env') {
-           when {
-            allOf {
-                anyOf {
-                    expression {
-                        params.deployToStage == 'yes'
-                    }                    
-                }
-                anyOf {
-                    branch 'release/*'
-                    tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
-                }                
-            }
-
-         }             
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('stg', '7761', '8761').call()      
-                }
-            }
-        } 
-        stage('Deploy to Prod Env') {
-           when {
-            allOf {
-                anyOf {
-                    expression {
-                        params.deployToProd == 'yes'
-                    }                    
-                }
-                anyOf {
-                    tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
-                }                
-            }
-            }             
-            steps {
-                script {
-                    timeout(time: 300, unit: 'SECONDS') { //SECONDS, MINUTES, HOURS
-                        input message: "Deploying ${env.APPLICATION_NAME} to Production??", ok: 'yes', submitter: 'sivasre,sujanacademy'
+                steps {
+                    script {
+                        imageValidation().call()
+                        dockerDeploy('stg', '7761', '8761').call()      
                     }
-                    dockerDeploy('prod', '8761', '8761').call()      
+                }
+            } 
+            stage('Deploy to Prod Env') {
+            when {
+                allOf {
+                    anyOf {
+                        expression {
+                            params.deployToProd == 'yes'
+                        }                    
+                    }
+                    anyOf {
+                        tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
+                    }                
+                }
+                }             
+                steps {
+                    script {
+                        timeout(time: 300, unit: 'SECONDS') { //SECONDS, MINUTES, HOURS
+                            input message: "Deploying ${env.APPLICATION_NAME} to Production??", ok: 'yes', submitter: 'sivasre,sujanacademy'
+                        }
+                        dockerDeploy('prod', '8761', '8761').call()      
+                    }
+                }
+            }         
+
+        }
+        post {
+            // Only run if the pipeline or stage has success status
+            success {
+                script {
+                    // Send email notification with custom message
+                    def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
+                    def body = "Build Number: ${env.BUILD_NUMBER} \n" +
+                                "status: ${currentBuild.currentResult} \n" +
+                                "Job URL: ${env.BUILD_URL}"
+                    //Send email notification using method
+                    sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
+                }
+            
+            }
+            // Only run if the pipeline or stage has failure status
+            failure {
+                script {
+                    // Send email notification with custom message
+                    def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
+                    def body = "Build Number: ${env.BUILD_NUMBER} \n" +
+                                "status: ${currentBuild.currentResult} \n" +
+                                "Job URL: ${env.BUILD_URL}"
+                    //Send email notification using method
+                    sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
                 }
             }
-        }         
+        }        
 
     }
-    post {
-        // Only run if the pipeline or stage has success status
-        success {
-            script {
-                // Send email notification with custom message
-                def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
-                def body = "Build Number: ${env.BUILD_NUMBER} \n" +
-                            "status: ${currentBuild.currentResult} \n" +
-                            "Job URL: ${env.BUILD_URL}"
-                //Send email notification using method
-                sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
-            }
-         
-        }
-        // Only run if the pipeline or stage has failure status
-        failure {
-            script {
-                // Send email notification with custom message
-                def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
-                def body = "Build Number: ${env.BUILD_NUMBER} \n" +
-                            "status: ${currentBuild.currentResult} \n" +
-                            "Job URL: ${env.BUILD_URL}"
-                //Send email notification using method
-                sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
-            }
-        }
-    }
- }
     
 }
 
 
 //This Jenkinsfile is for Eureka Deployment
 
-pipeline {
-    agent {
-        label 'k8s-slave'
-    }
-    //{ choice(name: 'CHOICES', choices: ['one', 'two', 'three'], description: '') }
-    parameters {
-        choice(name: 'scanOnly',
-               choices: 'no\nyes',
-               description: 'Do you want to Scan the application:?'
-        )
-        choice(name: 'buildOnly',
-               choices: 'no\nyes',
-               description: 'Do you want to Build the application:?'
-        )        
-        choice(name: 'dockerPush',
-               choices: 'no\nyes',
-               description: 'Do you want to trigger the application build, docker build and docker Push:?'
-        )        
-        choice(name: 'deployToDev',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to dev environment:?'
-        )           
-        choice(name: 'deployToTest',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to test environment:?'
-        )
-        choice(name: 'deployToStage',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to stage environment:?'
-        )           
-        choice(name: 'deployToProd',
-               choices: 'no\nyes',
-               description: 'Do you want to Deploy the application to prod environment:?'
-        )   
 
-    }
-    // Tools configured in jenkins-master
-    tools {
-        maven 'Maven-3.8.8'
-        jdk 'JDK-17'
-    }
-    environment {
-        APPLICATION_NAME = "${pipelineParams.appName}"
-        POM_VERSION = readMavenPom().getVersion()
-        POM_PACKAGING = readMavenPom().getPackaging()
-        DOCKER_HUB = "docker.io/sujanreddy76"
-        DOCKER_CREDS = credentials('dockerhub_creds') //username and password
-    }
-    stages {
-        stage('Build') {
-            when {
-                anyOf {
-                    expression {
-                        params.dockerPush == 'yes'
-                        params.buildOnly == 'yes'
-                    }
-                }
-            }
-            //This is where build for eureka application happens
-            steps {
-                script {
-                    docker.buildApp("${env.APPLICATION_NAME}")
-                }
-                // echo "Building ${APPLICATION_NAME} Application"
-                // sh 'mvn clean package -DskipTests=true'
-                // //mvn clean package -DskipTests=true
-                // //mvn clean package -Dmaven.test.skip=true
-                // archive 'target/*.jar'
-            }
-        }
-        // stage('Unit Tests') {
-        //     steps {
-        //         echo "************Performing Unit tests for ${APPLICATION_NAME} Application************"
-        //         sh 'mvn test'
-        //     }
-        // }
-
-        stage('SonarQube'){
-            when {
-                anyOf {
-                    expression {
-                        params.dockerPush == 'yes'
-                        params.buildOnly == 'yes'                        
-                        params.scanOnly == 'yes'
-                    }
-                }
-            }
-            steps {
-                // Code quality needs to be implemented in this stage
-                // Before we execute or write the code, make sure sonarqube-scanner plugin is installed
-                // Sonar details are configured in the manage jenkins > system 
-                echo "***********************Starting Sonar Scans with Quality Gates*********************"
-                withSonarQubeEnv('SonarQube') {//SonarQube is the name we configured in Manage Jenkins > system > SonarQube servers, It should match exactly
-                    sh """
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=i27-eureka \
-                            -Dsonar.host.url=http://34.55.4.214:9000 \
-                            -Dsonar.login=sqa_e077ec93f2d4816fb8ec6703a8b8b07857b01d84
-                    """    
-                }
-                timeout (time: 2, unit: 'MINUTES'){ //NANOSECONDS, SECONDS, MINUTES, HOURS, DAYS
-                         waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-        // stage('BuildFormat') {
-        //     steps{
-        //         script{ 
-        //             //Existing: i27-eureka-0.0.1-SNAPSHOT.jar
-        //             //Destination: i27-eureka-CurrentBuildNumber-branchName.packaging
-        //           sh """
-        //             echo "Testing Jar Source: i27-${env.APPLICATION_NAME}-${env.POM_VERSION}.${env.POM_PACKAGING}"
-        //             echo "Testing Jar Destination format: i27-${env.APPLICATION_NAME}-${currentBuild.number}-${BRANCH_NAME}.${env.POM_PACKAGING}"
-        //           """
-
-        //         }
-        //     }
-        // }
-        stage('Docker Build Push') {
-            when {
-                anyOf {
-                    expression {
-                        params.dockerPush == 'yes'
-                    }
-                }
-            }
-            steps {
-                script {
-                    dockerBuildAndPush().call()
-                }
-            }
-        }
-        stage('Deploy to Dev Env') {
-           when {
-                expression {
-                    params.deployToDev == 'yes'
-                }
-            }            
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('dev', '5761', '8761').call()
-                }  
-            }
-            // a mail should trigger based on the status
-            // jenkins url should be sent as an a email
-        }
-        stage('Deploy to Test Env') {
-           when {
-                expression {
-                    params.deployToTest == 'yes'
-                }
-            }             
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('tst', '6761', '8761').call()      
-                }
-            }
-        } 
-        stage('Deploy to Stage Env') {
-           when {
-            allOf {
-                anyOf {
-                    expression {
-                        params.deployToStage == 'yes'
-                    }                    
-                }
-                anyOf {
-                    branch 'release/*'
-                    tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
-                }                
-            }
-
-         }             
-            steps {
-                script {
-                    imageValidation().call()
-                    dockerDeploy('stg', '7761', '8761').call()      
-                }
-            }
-        } 
-        stage('Deploy to Prod Env') {
-           when {
-            allOf {
-                anyOf {
-                    expression {
-                        params.deployToProd == 'yes'
-                    }                    
-                }
-                anyOf {
-                    tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP" // v1.2.3 is the correct one, v123 is the wrong one
-                }                
-            }
-            }             
-            steps {
-                script {
-                    timeout(time: 300, unit: 'SECONDS') { //SECONDS, MINUTES, HOURS
-                        input message: "Deploying ${env.APPLICATION_NAME} to Production??", ok: 'yes', submitter: 'sivasre,sujanacademy'
-                    }
-                    dockerDeploy('prod', '8761', '8761').call()      
-                }
-            }
-        }         
-
-    }
-    post {
-        // Only run if the pipeline or stage has success status
-        success {
-            script {
-                // Send email notification with custom message
-                def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
-                def body = "Build Number: ${env.BUILD_NUMBER} \n" +
-                            "status: ${currentBuild.currentResult} \n" +
-                            "Job URL: ${env.BUILD_URL}"
-                //Send email notification using method
-                sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
-            }
-         
-        }
-        // Only run if the pipeline or stage has failure status
-        failure {
-            script {
-                // Send email notification with custom message
-                def subject = "Pipeline ${currentBuild.currentResult}: Job: ${env.JOB_NAME}, Build Number: ${env.BUILD_NUMBER}"
-                def body = "Build Number: ${env.BUILD_NUMBER} \n" +
-                            "status: ${currentBuild.currentResult} \n" +
-                            "Job URL: ${env.BUILD_URL}"
-                //Send email notification using method
-                sendEmailNotification('jaya.sujan.kumar@gmail.com', subject, body)                   
-            }
-        }
-    }
-}
 
 // imageValidation
 def imageValidation() {
