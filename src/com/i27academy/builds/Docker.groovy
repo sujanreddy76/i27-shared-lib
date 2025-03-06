@@ -1,6 +1,6 @@
 package com.i27academy.builds;
 
-Class Docker {
+class Docker {
     //Write all the methods here
     def jenkins
     Docker(jenkins) {
