@@ -47,6 +47,13 @@ def call(Map pipelineParams) {
         }
         environment {
             APPLICATION_NAME = "${pipelineParams.appName}"
+            //Below are the HostPorts
+            DEV_HOST_PORT = "${pipelineParams.devHostPort}"
+            TST_HOST_PORT = "${pipelineParams.tstHostPort}"
+            STG_HOST_PORT = "${pipelineParams.stgHostPort}"
+            PROD_HOST_PORT = "${pipelineParams.prodHostPort}"
+            //Below is the ContainerPort
+            CONT_PORT = "${pipelineParams.contPort}"
             POM_VERSION = readMavenPom().getVersion()
             POM_PACKAGING = readMavenPom().getPackaging()
             DOCKER_HUB = "docker.io/sujanreddy76"
@@ -145,7 +152,7 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         imageValidation().call()
-                        dockerDeploy('dev', '5761', '8761').call()
+                        dockerDeploy('dev', "${env.DEV_HOST_PORT}", "${env.CONT_PORT}").call()
                     }  
                 }
                 // a mail should trigger based on the status
@@ -160,7 +167,8 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         imageValidation().call()
-                        dockerDeploy('tst', '6761', '8761').call()      
+                        //dockerDeploy('tst', '6761', '8761').call()   
+                        dockerDeploy('tst', "${env.TST_HOST_PORT}", "${env.CONT_PORT}").call()    
                     }
                 }
             } 
@@ -182,7 +190,9 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         imageValidation().call()
-                        dockerDeploy('stg', '7761', '8761').call()      
+                        //dockerDeploy('stg', '7761', '8761').call()   
+                        dockerDeploy('stg', "${env.STG_HOST_PORT}", "${env.CONT_PORT}").call()    
+
                     }
                 }
             } 
@@ -204,7 +214,9 @@ def call(Map pipelineParams) {
                         timeout(time: 300, unit: 'SECONDS') { //SECONDS, MINUTES, HOURS
                             input message: "Deploying ${env.APPLICATION_NAME} to Production??", ok: 'yes', submitter: 'sivasre,sujanacademy'
                         }
-                        dockerDeploy('prod', '8761', '8761').call()      
+                       // dockerDeploy('prod', '8761', '8761').call()  
+                        dockerDeploy('prod', "${env.PROD_HOST_PORT}", "${env.CONT_PORT}").call()    
+
                     }
                 }
             }         
